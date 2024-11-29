@@ -63,7 +63,6 @@
     <div class="container mt-4">
         <div class="row">
             <div class="col-md-6">
-                <h5>Primary Raster Image</h5>
             </div>
             <div class="col-md-6">
             </div>
@@ -71,7 +70,7 @@
         <div class="row mt-5">
             <div class="col-md-12">
                 <!-- <h5>Class-wise Area Calculations</h5> -->
-                <div id="area-results" class="alert alert-info">Calculating areas...</div>
+                <div id="area-results" class="alert alert-info"></div>
             </div>
         </div>
     </div>
@@ -176,38 +175,14 @@
                 for (const [className, unitArea] of Object.entries(classAreas)) {
                     const percentage = (unitArea / totalRasterArea) * 100;
 
-                    areaResultsHTML += `
-                        <div class="area-item">
-                            <input type="number" value="1" step="0.1" min="0" onchange="updateArea(this, ${unitArea}, '${className}')" data-original-area="${unitArea}">
-                            <div class="class-name">
-                                <strong>${className} - </strong>
-                            </div>
-                            <div class="area-values">
-                                <div>
-                                    <strong>Unit:</strong> ${unitArea.toFixed(5)} sq. km (${percentage.toFixed(5)}%)
-                                </div>
-                                <div>
-                                    <strong>Total:</strong> 
-                                    <span id="total-area-${className}">${unitArea.toFixed(5)}</span> sq. km
-                                </div>
-                            </div>
-                        </div>
-                    `;
+                       
                     totalDetectedArea += unitArea;
                     totalClassAreaSum += unitArea;
                 }
 
                 const totalDetectedPercentage = (totalDetectedArea / totalRasterArea) * 100;
 
-                areaResultsHTML += `
-                    <div class="area-item">
-                        <strong> Total Detected Area:</strong> 
-                        <span id="detected-area">${totalDetectedArea.toFixed(5)}</span> sq. km 
-                        (${totalDetectedPercentage.toFixed(5)}%)
-                        <strong style="margin-left: 20px;">Total:</strong> 
-                        <span id="total-class-area-sum">${totalClassAreaSum.toFixed(5)}</span> sq. km
-                    </div>`;
-                document.getElementById('area-results').innerHTML = areaResultsHTML;
+               
 
                 const center = bounds.getCenter();
                 map = L.map('map').setView([center.lat, center.lng],15);
