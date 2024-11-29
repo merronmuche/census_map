@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Map Visualization</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/proj4"></script>
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #map {
+            width: 100%;
+            height: 600px;
+        }
+        .legend {
+            background-color: white;
+            padding: 10px;
+            line-height: 18px;
+            color: #333;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .area-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .area-item input[type="number"] {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            text-align: center;
+            margin-right: 5px;
+            border: 2px solid #007bff;
+            outline: none;
+        }
+        .area-item input[type="number"]:focus {
+            border-color: #0056b3;
+        }
+        .area-item .class-name {
+            font-size: 1.2em;
+            margin-right: 15px;
+        }
+        .area-item .area-values {
+            display: flex;
+            gap: 10px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Primary Raster Image</h5>
+            </div>
+            <div class="col-md-6">
+            </div>
+        </div>
+        <div class="row mt-5">
+            <div class="col-md-12">
+                <!-- <h5>Class-wise Area Calculations</h5> -->
+                <div id="area-results" class="alert alert-info">Calculating areas...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getIDFromPath() {
+            const pathSegments = window.location.pathname.split('/');
+            return pathSegments[pathSegments.length - 2];
+        }
+
+        const id = getIDFromPath();
+        let map;
+        const classColors = {};
+        const predefinedColors = ['#00FF00', '#000000'];
+        let totalDetectedArea = 0;
+        let totalClassAreaSum = 0;
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        function getColor(className, index) {
+            if (index < predefinedColors.length) {
+                return predefinedColors[index];
+            } else if (!classColors[className]) {
+                classColors[className] = getRandomColor();
+            }
+            return classColors[className];
+        }
+
+        function style(feature, index) {
+            return {
+                fillColor: getColor(feature.properties.class_name, index),
+                weight: 2,
+                opacity: 1,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.7
+            };
+        }
+
+        function calculateClassAreas(geojson) {
+            const classAreas = {};
+            geojson.features.forEach(feature => {
+                const className = feature.properties.class_name;
+                const area = turf.area(feature) / 1e6; // Convert to sq. km
+                classAreas[className] = (classAreas[className] || 0) + area;
+            });
+            return classAreas;
+        }
+
+        function calculateTotalRasterArea(bounds) {
+            const rectangleGeoJson = turf.bboxPolygon([
+                bounds.getWest(),
+                bounds.getSouth(),
+                bounds.getEast(),
+                bounds.getNorth()
+            ]);
+            const totalArea = turf.area(rectangleGeoJson) / 1e6; // Convert to sq. km
+            return totalArea;
+        }
+
+        function updateArea(input, originalArea, className) {
+            const multiplier = parseFloat(input.value);
+            const newTotalArea = originalArea * multiplier;
+            const totalAreaElement = document.getElementById(`total-area-${className}`);
+            totalAreaElement.textContent = `${newTotalArea.toFixed(5)}`;
+
+            const totalClassAreaSumElement = document.getElementById('total-class-area-sum');
+            const totalClassAreas = document.querySelectorAll('.area-item input[type="number"]');
+            totalClassAreaSum = Array.from(totalClassAreas).reduce((sum, element) => {
+                const currentArea = parseFloat(element.value) * parseFloat(element.dataset.originalArea);
+                return sum + currentArea;
+            }, 0);
+            totalClassAreaSumElement.textContent = `${totalClassAreaSum.toFixed(5)}`;
+        }
+
+        fetch('/county/' + id + '/geojson/')
+            .then(response => response.json())
+            .then(data => {
+                const geojson = data['shape_file'];
+                const classAreas = calculateClassAreas(geojson);
+
+                let areaResultsHTML = '';
+
+                const geoJsonLayer = L.geoJSON(geojson, {
+                    style: function(feature) {
+                        const className = feature.properties.class_name;
+                        const index = Object.keys(classAreas).indexOf(className);
+                        return style(feature, index);
+                    }
+                });
+
+                const bounds = geoJsonLayer.getBounds();
+                const totalRasterArea = calculateTotalRasterArea(bounds);
+
+                for (const [className, unitArea] of Object.entries(classAreas)) {
+                    const percentage = (unitArea / totalRasterArea) * 100;
+
+                    areaResultsHTML += `
+                        <div class="area-item">
+                            <input type="number" value="1" step="0.1" min="0" onchange="updateArea(this, ${unitArea}, '${className}')" data-original-area="${unitArea}">
+                            <div class="class-name">
+                                <strong>${className} - </strong>
+                            </div>
+                            <div class="area-values">
+                                <div>
+                                    <strong>Unit:</strong> ${unitArea.toFixed(5)} sq. km (${percentage.toFixed(5)}%)
+                                </div>
+                                <div>
+                                    <strong>Total:</strong> 
+                                    <span id="total-area-${className}">${unitArea.toFixed(5)}</span> sq. km
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    totalDetectedArea += unitArea;
+                    totalClassAreaSum += unitArea;
+                }
+
+                const totalDetectedPercentage = (totalDetectedArea / totalRasterArea) * 100;
+
+                areaResultsHTML += `
+                    <div class="area-item">
+                        <strong> Total Detected Area:</strong> 
+                        <span id="detected-area">${totalDetectedArea.toFixed(5)}</span> sq. km 
+                        (${totalDetectedPercentage.toFixed(5)}%)
+                        <strong style="margin-left: 20px;">Total:</strong> 
+                        <span id="total-class-area-sum">${totalClassAreaSum.toFixed(5)}</span> sq. km
+                    </div>`;
+                document.getElementById('area-results').innerHTML = areaResultsHTML;
+
+                const center = bounds.getCenter();
+                map = L.map('map').setView([center.lat, center.lng],15);
+
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 18
+                }).addTo(map);
+
+                geoJsonLayer.addTo(map);
+                L.rectangle(bounds, { color: "#ff0000", weight: 1 }).addTo(map);
+
+                const legend = L.control({ position: 'bottomright' });
+                legend.onAdd = function (map) {
+                    const div = L.DomUtil.create('div', 'legend');
+                    Object.keys(classAreas).forEach((className, index) => {
+                        div.innerHTML += `<i style="background:${getColor(className, index)}"></i> ${className}<br>`;
+                    });
+                    return div;
+                };
+                legend.addTo(map);
+            })
+            .catch(error => console.error('Error:', error));
+    </script>
+</body>
+</html>
