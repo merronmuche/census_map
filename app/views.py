@@ -2,7 +2,7 @@ from .models import MetropolitanArea,County
 from django.shortcuts import render
 from django.http import JsonResponse
 from djgeojson.views import GeoJSONLayerView
-
+import pandas as pd
 import requests
 from django.views.decorators.csrf import csrf_exempt
 from io import BytesIO
@@ -57,63 +57,78 @@ class CountyGeoJSONView(GeoJSONLayerView):
             print(f"Error during GeoJSON generation: {str(e)}")
             return JsonResponse({"error": str(e)}, status=500)
 
+# Load the MSA-to-county mapping file
+
+
 @csrf_exempt
 def create_counties_by_metro(request):
     """
-    Create counties based on metropolitan area.
+    Dynamically create counties based on metropolitan area name.
     """
     if request.method == "POST":
-        data = json.loads(request.body)
+        try:
+            data = json.loads(request.body)
 
-        metro_name = data.get("metro_name")
-        metro_fips = data.get("metro_fips")
+            # Extract metro name from request
+            metro_name = data.get("metro_name")
+            if not metro_name:
+                return JsonResponse({"error": "Metropolitan area name is required"}, status=400)
 
-        if not metro_name and not metro_fips:
-            return JsonResponse({"error": "Metro name or FIPS codes are required"}, status=400)
+            # Load MSA-to-county mapping dataset
+            msa_counties_file = "/home/meron/works/census_map/list1_2020.xls"
+            msa_data = pd.read_excel(msa_counties_file, engine="xlrd", skiprows=2)
 
-        # Fetch the TIGER/Line shapefile for counties
-        BASE_URL = "https://www2.census.gov/geo/tiger/TIGER2022/COUNTY/tl_2022_us_county.zip"
-        response = requests.get(BASE_URL)
+            # Filter dataset by metro name
+            metro_data = msa_data[msa_data["CBSA Title"].str.contains(metro_name, case=False, na=False)]
+            if metro_data.empty:
+                return JsonResponse({"error": f"No counties found for metropolitan area: {metro_name}"}, status=404)
 
-        if response.status_code != 200:
-            return JsonResponse({"error": "Failed to fetch shapefile"}, status=500)
+            # Extract county FIPS codes
+            county_fips_list = metro_data.apply(
+                lambda row: f"{int(row['FIPS State Code']):02}{int(row['FIPS County Code']):03}", axis=1
+            ).tolist()
 
-        # Extract the ZIP file
-        with ZipFile(BytesIO(response.content)) as z:
-            z.extractall("counties_temp")
-        shapefile_path = "counties_temp/tl_2022_us_county.shp"
+            # Fetch the TIGER/Line shapefile for counties
+            BASE_URL = "https://www2.census.gov/geo/tiger/TIGER2022/COUNTY/tl_2022_us_county.zip"
+            response = requests.get(BASE_URL)
+            if response.status_code != 200:
+                return JsonResponse({"error": "Failed to fetch shapefile"}, status=500)
 
-        # Load shapefile into GeoPandas
-        counties_gdf = gpd.read_file(shapefile_path)
+            # Extract the ZIP file
+            with ZipFile(BytesIO(response.content)) as z:
+                z.extractall("counties_temp")
+            shapefile_path = "counties_temp/tl_2022_us_county.shp"
 
-        if metro_fips:
-            filtered_counties = counties_gdf[counties_gdf["GEOID"].isin(metro_fips)]
-        elif metro_name:
-            if metro_name.lower() == "new york city":
-                nyc_fips = ["36061", "36005", "36047", "36081", "36085"]
-                filtered_counties = counties_gdf[counties_gdf["GEOID"].isin(nyc_fips)]
-            else:
-                return JsonResponse({"error": "Metro name not recognized or supported"}, status=404)
+            # Load shapefile into GeoPandas
+            counties_gdf = gpd.read_file(shapefile_path)
 
-        if filtered_counties.empty:
-            return JsonResponse({"error": "No counties found for the specified metropolitan area"}, status=404)
+            # Filter counties by FIPS codes
+            filtered_counties = counties_gdf[counties_gdf["GEOID"].isin(county_fips_list)]
+            if filtered_counties.empty:
+                return JsonResponse({"error": "No counties found for the specified metropolitan area"}, status=404)
 
-        metro_area, created = MetropolitanArea.objects.get_or_create(name=metro_name)
-        counties_created = 0
-        for _, row in filtered_counties.iterrows():
-            county_name = row["NAME"]
-            fips_code = row["GEOID"]
-            shape_data = json.loads(filtered_counties[filtered_counties["GEOID"] == fips_code].to_json())
+            # Loop through the filtered counties and save to the database
+            counties_created = 0
+            for _, row in filtered_counties.iterrows():
+                county_name = row["NAME"]
+                fips_code = row["GEOID"]
+                shape_data = json.loads(filtered_counties[filtered_counties["GEOID"] == fips_code].to_json())
 
-            # Check if county already exists
-            if not County.objects.filter(fips_code=fips_code).exists():
-                County.objects.create(
-                    name=county_name,
-                    fips_code=fips_code,
-                    shape_data=shape_data,
-                )
-                counties_created += 1
+                if not County.objects.filter(fips_code=fips_code).exists():
+                    County.objects.create(
+                        name=county_name,
+                        fips_code=fips_code,
+                        shape_data=shape_data,
+                    )
+                    counties_created += 1
 
-        return JsonResponse({"message": f"{counties_created} counties created successfully for {metro_name}"}, status=201)
-    else:
-        return JsonResponse({"error": "Invalid HTTP method"}, status=405)
+            return JsonResponse(
+                {"message": f"{counties_created} counties created successfully for {metro_name}"},
+                status=201,
+            )
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid HTTP method"}, status=405)
+
