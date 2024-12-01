@@ -76,7 +76,7 @@
     </div>
 
     <script>
-        function getIDFromPath() {
+         function getIDFromPath() {
             const pathSegments = window.location.pathname.split('/');
             return pathSegments[pathSegments.length - 2];
         }
@@ -153,51 +153,49 @@
             totalClassAreaSumElement.textContent = `${totalClassAreaSum.toFixed(5)}`;
         }
 
-        fetch('/county/' + id + '/geojson/')
+        fetch('/county/geojson/')
             .then(response => response.json())
             .then(data => {
-                const geojson = data['shape_file'];
-                const classAreas = calculateClassAreas(geojson);
-
-                let areaResultsHTML = '';
-
+                console.log(data)
+                const geojson = data['features'];
+                const classAreas = {};
+    
                 const geoJsonLayer = L.geoJSON(geojson, {
                     style: function(feature) {
                         const className = feature.properties.class_name;
                         const index = Object.keys(classAreas).indexOf(className);
                         return style(feature, index);
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const countyName = feature.properties.name;
+                        if (countyName) {
+                            layer.bindPopup(`<strong>${countyName}</strong>`);
+                        }
                     }
                 });
-
+    
                 const bounds = geoJsonLayer.getBounds();
                 const totalRasterArea = calculateTotalRasterArea(bounds);
-
-                for (const [className, unitArea] of Object.entries(classAreas)) {
-                    const percentage = (unitArea / totalRasterArea) * 100;
-
-                       
-                    totalDetectedArea += unitArea;
-                    totalClassAreaSum += unitArea;
+    
+                for (const feature of geojson) {
+                    const className = feature.properties.class_name;
+                    const area = turf.area(feature.geometry) / 1e6; // Convert to sq. km
+                    classAreas[className] = (classAreas[className] || 0) + area;
                 }
-
-                const totalDetectedPercentage = (totalDetectedArea / totalRasterArea) * 100;
-
-               
-
+    
                 const center = bounds.getCenter();
-                map = L.map('map').setView([center.lat, center.lng],10);
-
+                map = L.map('map').setView([center.lat, center.lng], 8);
+    
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
                     subdomains: 'abcd',
                     maxZoom: 18
                 }).addTo(map);
-
+    
                 geoJsonLayer.addTo(map);
-                L.rectangle(bounds, { color: "#ff0000", weight: 1 }).addTo(map);
-
+    
                 const legend = L.control({ position: 'bottomright' });
-                legend.onAdd = function (map) {
+                legend.onAdd = function(map) {
                     const div = L.DomUtil.create('div', 'legend');
                     Object.keys(classAreas).forEach((className, index) => {
                         div.innerHTML += `<i style="background:${getColor(className, index)}"></i> ${className}<br>`;
@@ -208,5 +206,6 @@
             })
             .catch(error => console.error('Error:', error));
     </script>
+    
 </body>
 </html>
