@@ -20,9 +20,9 @@ class CountyGeoJSONView(GeoJSONLayerView):
     Returns GeoJSON for all counties.
     """
     def get_queryset(self):
-        return County.objects.all()
+        return County.objects.filter(metropolitan_area__name="New York–Newark–Jersey City, NY-NJ-PA MSA")
+    
     def render_to_response(self, context, **response_kwargs):
-
         counties = list(self.get_queryset())
         if not counties:
             return JsonResponse({"error": "No counties found"}, status=404)
@@ -32,19 +32,31 @@ class CountyGeoJSONView(GeoJSONLayerView):
             features = []
 
             for county in counties:
-                # Ensure shape_data exists and has the expected structure
-                if county.shape_data and "features" in county.shape_data and county.shape_data["features"]:
-                    geometry = county.shape_data["features"][0].get("geometry", None)
-                    if geometry:
-                        features.append({
-                            "type": "Feature",
-                            "geometry": geometry,
-                            "properties": {
-                                "name": county.name,
-                            },
-                        })
-                else:
-                    print(f"Invalid shape_data for county: {county.name}")
+                try:
+                    # Deserialize shape_data if it's stored as a string
+                    shape_data = (
+                        json.loads(county.shape_data)
+                        if isinstance(county.shape_data, str)
+                        else county.shape_data
+                    )
+
+                    # Ensure shape_data has the expected structure
+                    if shape_data and "features" in shape_data and shape_data["features"]:
+                        geometry = shape_data["features"][0].get("geometry", None)
+                        if geometry:
+                            features.append({
+                                "type": "Feature",
+                                "geometry": geometry,
+                                "properties": {
+                                    "name": county.name,
+                                },
+                            })
+                    else:
+                        print(f"Invalid shape_data for county: {county.name}")
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding shape_data for county {county.name}: {str(e)}")
+                except Exception as e:
+                    print(f"Unexpected error for county {county.name}: {str(e)}")
 
             # Wrap the features in a FeatureCollection
             geojson_data = {
@@ -56,7 +68,6 @@ class CountyGeoJSONView(GeoJSONLayerView):
         except Exception as e:
             print(f"Error during GeoJSON generation: {str(e)}")
             return JsonResponse({"error": str(e)}, status=500)
-
 # Load the MSA-to-county mapping file
 
 
