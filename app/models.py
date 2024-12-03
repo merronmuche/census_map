@@ -23,7 +23,7 @@ class County(models.Model):
         null=True,
         blank=True,
     )
-    fips_code = models.CharField(max_length=10, unique=True)
+    fips_code = models.CharField(max_length=10,null=True,blank=True)
     shape_data = models.JSONField(blank=True, null=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
