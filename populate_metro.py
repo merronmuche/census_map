@@ -3,11 +3,12 @@
 import os
 import django
 import uuid
-from app.models import MetropolitanArea
 
 # Set up Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "census_map.settings")
 django.setup()
+
+from app.models import MetropolitanArea
 
 
 # List of top metropolitan areas with CBSA codes
