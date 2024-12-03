@@ -33,7 +33,6 @@ metro_areas = [
     {"name": "San Diego–Chula Vista–Carlsbad, CA MSA", "description": "San Diego, CA CSA", "cbsa_code": "41740", "population_2023": 3269973},
     {"name": "Denver–Aurora–Lakewood, CO MSA", "description": "Denver–Aurora, CO CSA", "cbsa_code": "19740", "population_2023": 3005131},
     {"name": "Baltimore–Columbia–Towson, MD MSA", "description": "Washington–Baltimore–Arlington, DC-MD-VA-WV-PA CSA", "cbsa_code": "12580", "population_2023": 2834316},
-    # Remaining metro areas here up to 50
     {"name": "Orlando–Kissimmee–Sanford, FL MSA", "description": "Orlando–Lakeland–Deltona, FL CSA", "cbsa_code": "36740", "population_2023": 2817933},
     {"name": "Charlotte–Concord–Gastonia, NC-SC MSA", "description": "Charlotte–Concord, NC-SC CSA", "cbsa_code": "16740", "population_2023": 2805115},
     {"name": "St. Louis, MO-IL MSA", "description": "St. Louis–St. Charles–Farmington, MO-IL CSA", "cbsa_code": "41180", "population_2023": 2796999},
@@ -64,9 +63,6 @@ metro_areas = [
     {"name": "Fresno, CA MSA", "description": "Fresno–Hanford–Corcoran, CA CSA", "cbsa_code": "23420", "population_2023": 1180020},
     {"name": "Grand Rapids–Kentwood, MI MSA", "description": "Grand Rapids–Wyoming, MI CSA", "cbsa_code": "24340", "population_2023": 1162950},
     {"name": "Buffalo–Cheektowaga, NY MSA", "description": "Buffalo–Cheektowaga–Olean, NY CSA", "cbsa_code": "15380", "population_2023": 1155604},
-    {"name": "Hartford–West Hartford–East Hartford, CT MSA", "description": "New Haven–Hartford–Waterbury, CT CSA", "cbsa_code": "25540", "population_2023": 1151543},
-    {"name": "Tucson, AZ MSA", "description": "Tucson–Nogales, AZ CSA", "cbsa_code": "46060", "population_2023": 1063162},
-
 ]
 
 def populate_metro_areas():
