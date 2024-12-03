@@ -1,7 +1,17 @@
 
-gcp_key.json
 *.crt
 *.key
+*.xls
+*.xlsx
+*.csv
+*.ods
+*.json
+*.cpg
+*.dbf
+*.shx
+*.prj
+*.xml
+*.shp
 staticfiles
 data
 try.py
