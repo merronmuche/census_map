@@ -6,6 +6,7 @@
 *.csv
 *.ods
 *.json
+*.vscode
 *.cpg
 *.dbf
 *.shx
