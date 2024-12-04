@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    CensusTractGeoJSONView,
     CountyGeoJSONView,
     create_counties_by_metro,
     metropolitan_map,
@@ -11,5 +12,7 @@ urlpatterns = [
     path("api/get_county_geojson/", CountyGeoJSONView.as_view(), name="county_geojson"),
     path("county/create-by-metro/", create_counties_by_metro, name="create_counties_by_metro"),
     path("map/", metropolitan_map, name="metropolitan_map"),
+    path("api/get_census_tracts/", CensusTractGeoJSONView.as_view(), name="census_tract_geojson"),
+
 
 ]
