@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from djgeojson.views import GeoJSONLayerView
-from .models import MetropolitanArea, County
+from .models import CensusTract, MetropolitanArea, County
 import pandas as pd
 import requests
 from django.views.decorators.csrf import csrf_exempt
@@ -9,6 +9,8 @@ from io import BytesIO
 from zipfile import ZipFile
 import geopandas as gpd
 import json
+from django.views import View
+
 
 
 def county_map(request):
@@ -26,6 +28,56 @@ def get_metropolitan_areas(request):
 
     metros = MetropolitanArea.objects.values_list('name', flat=True).order_by('name')
     return JsonResponse({"metropolitan_areas": list(metros)}, status=200)
+
+
+class CensusTractGeoJSONView(View):
+    def get_queryset(self, metro_name):
+        
+        return CensusTract.objects.filter(
+            county__metropolitan_area__name=metro_name
+        )
+
+    def render_to_response(self, context, **response_kwargs):
+        metro_name = self.request.GET.get("metro_name", None)
+        if not metro_name:
+            return JsonResponse({"error": "metro_name parameter is required"}, status=400)
+
+        census_tracts = self.get_queryset(metro_name)
+        if not census_tracts:
+            return JsonResponse({"error": "No census tracts found for the given metropolitan area"}, status=404)
+
+        features = []
+        for tract in census_tracts:
+            try:
+                # Parse shape_data for GeoJSON structure
+                geometry = (
+                    json.loads(tract.shape_data)
+                    if isinstance(tract.shape_data, str)
+                    else tract.shape_data
+                )
+
+                if geometry:
+                    features.append({
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {
+                            "name": tract.name,
+                            "fips_code": tract.fips_code,
+                        },
+                    })
+            except Exception as e:
+                print(f"Error processing census tract {tract.name}: {e}")
+
+        geojson_data = {
+            "type": "FeatureCollection",
+            "features": features,
+        }
+
+        return JsonResponse(geojson_data, safe=False)
+
+    def get(self, request, *args, **kwargs):
+        return self.render_to_response(context=None)
+
 
 class CountyGeoJSONView(GeoJSONLayerView):
     def get_queryset(self):
