@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from djgeojson.views import GeoJSONLayerView
-from .models import CensusTract, MetropolitanArea, County
+from .models import CensusTract, MetropolitanArea, County, BlockGroup
 import pandas as pd
 import requests
 from django.views.decorators.csrf import csrf_exempt
@@ -10,7 +10,6 @@ from zipfile import ZipFile
 import geopandas as gpd
 import json
 from django.views import View
-
 
 
 def county_map(request):
@@ -29,6 +28,59 @@ def get_metropolitan_areas(request):
     metros = MetropolitanArea.objects.values_list('name', flat=True).order_by('name')
     return JsonResponse({"metropolitan_areas": list(metros)}, status=200)
 
+
+class BlockGroupGeoJSONView(View):
+    def get_queryset(self, metro_name):
+        # Filter BlockGroups by Metropolitan Area
+        return BlockGroup.objects.filter(
+            census_tract__county__metropolitan_area__name=metro_name
+        )
+
+    def render_to_response(self, context, **response_kwargs):
+        metro_name = self.request.GET.get("metro_name", None)
+        if not metro_name:
+            return JsonResponse({"error": "metro_name parameter is required"}, status=400)
+
+        block_groups = self.get_queryset(metro_name)
+        if not block_groups.exists():
+            return JsonResponse({"error": f"No block groups found for {metro_name}."}, status=404)
+
+        features = []
+        for block_group in block_groups:
+            try:
+                # Parse shape_data for GeoJSON structure
+                geometry = (
+                    json.loads(block_group.shape_data)
+                    if isinstance(block_group.shape_data, str)
+                    else block_group.shape_data
+                )
+
+                if geometry:
+                    features.append({
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {
+                            "name": block_group.name,
+                            "fips_code": block_group.fips_code,
+                            "population": block_group.population,
+                            "male": block_group.male,
+                            "female": block_group.female,
+                            "black": block_group.black,
+                            "white": block_group.white,
+                        },
+                    })
+            except Exception as e:
+                print(f"Error processing block group {block_group.name}: {e}")
+
+        geojson_data = {
+            "type": "FeatureCollection",
+            "features": features,
+        }
+
+        return JsonResponse(geojson_data, safe=False)
+
+    def get(self, request, *args, **kwargs):
+        return self.render_to_response(context=None)
 
 class CensusTractGeoJSONView(View):
     def get_queryset(self, metro_name):
