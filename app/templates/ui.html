@@ -25,6 +25,7 @@
                     <option value="">Select Geography Level</option>
                     <option value="county">County</option>
                     <option value="census_tract">Census Tract</option>
+                    <option value="block_group">Block Group</option>
                 </select>
             </div>
         </div>
@@ -35,7 +36,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            const map = L.map('map').setView([37.8, -96], 4);
+            const map = L.map('map').setView([37.8, -96], 4); // Default center
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
@@ -78,11 +79,17 @@
 
                 if (!selectedMetro || !displayOption) return;
 
-                const apiEndpoint = displayOption === "county" 
-                    ? `/api/get_county_geojson/?metro_name=${encodeURIComponent(selectedMetro)}`
-                    : `/api/get_census_tracts/?metro_name=${encodeURIComponent(selectedMetro)}`;
+                // Determine the API endpoint based on the selected geography level
+                let apiEndpoint = "";
+                if (displayOption === "county") {
+                    apiEndpoint = `/api/get_county_geojson/?metro_name=${encodeURIComponent(selectedMetro)}`;
+                } else if (displayOption === "census_tract") {
+                    apiEndpoint = `/api/get_census_tracts/?metro_name=${encodeURIComponent(selectedMetro)}`;
+                } else if (displayOption === "block_group") {
+                    apiEndpoint = `/api/get_block_groups/?metro_name=${encodeURIComponent(selectedMetro)}`;
+                }
 
-                // Fetch GeoJSON data for the selected option
+                // Fetch GeoJSON data for the selected geography level
                 fetch(apiEndpoint)
                     .then(response => response.json())
                     .then(geojsonData => {
