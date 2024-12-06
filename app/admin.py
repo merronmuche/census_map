@@ -24,7 +24,7 @@ class CensusTractAdmin(admin.ModelAdmin):
 
 @admin.register(BlockGroup)
 class BlockGroupAdmin(admin.ModelAdmin):
-    list_display = ("name", "census_tract", "population", "male", "female")
+    list_display = ("name", "census_tract","fips_code", "population", "male", "female")
     search_fields = ("name", "fips_code", "census_tract__name")
     list_filter = ("census_tract", "created_at", "updated_at")
     
