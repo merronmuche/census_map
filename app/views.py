@@ -10,6 +10,7 @@ from zipfile import ZipFile
 import geopandas as gpd
 import json
 from django.views import View
+from django.db.models import Sum
 
 
 def county_map(request):
@@ -84,18 +85,23 @@ class BlockGroupGeoJSONView(View):
 
 class CensusTractGeoJSONView(View):
     def get_queryset(self, metro_name):
-        
+
         return CensusTract.objects.filter(
             county__metropolitan_area__name=metro_name
+        ).annotate(
+            cumulative_population=Sum('blockgroup__population')  # Sum population of related block groups
         )
 
     def render_to_response(self, context, **response_kwargs):
+        """
+        Build the GeoJSON response for census tracts.
+        """
         metro_name = self.request.GET.get("metro_name", None)
         if not metro_name:
             return JsonResponse({"error": "metro_name parameter is required"}, status=400)
 
         census_tracts = self.get_queryset(metro_name)
-        if not census_tracts:
+        if not census_tracts.exists():
             return JsonResponse({"error": "No census tracts found for the given metropolitan area"}, status=404)
 
         features = []
@@ -115,6 +121,7 @@ class CensusTractGeoJSONView(View):
                         "properties": {
                             "name": tract.name,
                             "fips_code": tract.fips_code,
+                            "population": tract.cumulative_population or 0,  # Include cumulative population
                         },
                     })
             except Exception as e:
@@ -134,7 +141,11 @@ class CensusTractGeoJSONView(View):
 class CountyGeoJSONView(GeoJSONLayerView):
     def get_queryset(self):
         metro_name = self.request.GET.get("metro_name", "Default Metro Area")
-        return County.objects.filter(metropolitan_area__name=metro_name)
+        return County.objects.filter(
+            metropolitan_area__name=metro_name
+        ).annotate(
+            cumulative_population=Sum('censustract__blockgroup__population')  # Sum population of related block groups
+        )
 
     def render_to_response(self, context, **response_kwargs):
         counties = list(self.get_queryset())
@@ -155,7 +166,10 @@ class CountyGeoJSONView(GeoJSONLayerView):
                         features.append({
                             "type": "Feature",
                             "geometry": geometry,
-                            "properties": {"name": county.name},
+                            "properties": {
+                            "name": county.name,
+                            "population": county.cumulative_population or 0,  # Include cumulative population
+                        },
                         })
             except Exception as e:
                 print(f"Error processing county {county.name}: {e}")

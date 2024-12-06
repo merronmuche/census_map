@@ -122,52 +122,54 @@
                             legend.remove(); // Remove any existing legend
                         }
 
-                        if (displayOption === "block_group") {
-                            addLegend(); // Add legend only for block groups
-                        }
+                        addLegend(displayOption); // Add a legend dynamically based on the displayOption
                     })
                     .catch(error => alert('Failed to load GeoJSON data. Please try again.'));
             });
 
             // Style function for GeoJSON
-function featureStyle(feature) {
-    const displayOption = document.getElementById('displayOption').value;
+            function featureStyle(feature) {
+                const displayOption = document.getElementById('displayOption').value;
 
-    // Uniform bold color for county and census tract
-    if (displayOption === "county" || displayOption === "census_tract") {
-        return {
-            fillColor: '#4682B4', // Bold steel blue
-            weight: 1,
-            opacity: 1,
-            color: 'white',
-            dashArray: '3',
-            fillOpacity: 0.7
-        };
-    }
+                const population = feature.properties.population || 0;
 
-    // Dynamic color based on population for block groups
-    const population = feature.properties.population || 0;
-    return {
-        fillColor: getColor(population),
-        weight: 1,
-        opacity: 1,
-        color: 'white',
-        dashArray: '3',
-        fillOpacity: 0.7
-    };
-}
+                // Apply the same colors with different ranges for each level
+                return {
+                    fillColor: getColor(population, displayOption),
+                    weight: 1,
+                    opacity: 1,
+                    color: 'white',
+                    dashArray: '3',
+                    fillOpacity: 0.7
+                };
+            }
 
-// Dynamic color scale for block group population
-function getColor(population) {
-    return population > 10000 ? '#800026' :
-           population > 5000  ? '#BD0026' :
-           population > 1000  ? '#E31A1C' :
-           population > 500   ? '#FC4E2A' :
-           population > 200   ? '#FD8D3C' :
-           population > 100   ? '#FEB24C' :
-           population > 50    ? '#FED976' :
-                                '#FFEDA0';
-}
+            // Unified color scheme, different ranges for each level
+            function getColor(population, displayOption) {
+                const colorScale = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026'];
+
+                if (displayOption === "block_group") {
+                    const ranges = [0, 50, 100, 200, 500, 1000];
+                    return getRangeColor(population, ranges, colorScale);
+                } else if (displayOption === "census_tract") {
+                    const ranges = [0, 500, 1000, 2000, 5000, 10000];
+                    return getRangeColor(population, ranges, colorScale);
+                } else if (displayOption === "county") {
+                    const ranges = [0, 5000, 10000, 20000, 50000, 100000];
+                    return getRangeColor(population, ranges, colorScale);
+                }
+                return '#d9d9d9'; // Default color
+            }
+
+            // Get color based on range
+            function getRangeColor(value, ranges, colors) {
+                for (let i = 0; i < ranges.length; i++) {
+                    if (value <= ranges[i]) {
+                        return colors[i];
+                    }
+                }
+                return colors[colors.length - 1]; // For values above max range
+            }
 
             // Add popup for each feature
             function onEachFeature(feature, layer) {
@@ -176,22 +178,33 @@ function getColor(population) {
                                  <strong>Population:</strong> ${population}`);
             }
 
-            // Add legend dynamically for block groups
-            function addLegend() {
+            // Add legend dynamically
+            function addLegend(displayOption) {
                 legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function () {
                     const div = L.DomUtil.create('div', 'legend');
-                    const grades = [0, 50, 100, 200, 500, 1000, 5000, 10000];
-                    const labels = [];
+                    let grades, title;
 
+                    if (displayOption === "block_group") {
+                        grades = [0, 50, 100, 200, 500, 1000];
+                        title = "Block Group Population";
+                    } else if (displayOption === "census_tract") {
+                        grades = [0, 500, 1000, 2000, 5000, 10000];
+                        title = "Census Tract Population";
+                    } else if (displayOption === "county") {
+                        grades = [0, 5000, 10000, 20000, 50000, 100000];
+                        title = "County Population";
+                    }
+
+                    const labels = [];
                     for (let i = 0; i < grades.length; i++) {
                         labels.push(
-                            `<i style="background:${getColor(grades[i] + 1)}"></i> ` +
+                            `<i style="background:${getColor(grades[i] + 1, displayOption)}"></i> ` +
                             `${grades[i]}${grades[i + 1] ? `&ndash;${grades[i + 1]}` : '+'}`
                         );
                     }
 
-                    div.innerHTML = `<h4>Population</h4>${labels.join('<br>')}`;
+                    div.innerHTML = `<h4>${title}</h4>${labels.join('<br>')}`;
                     return div;
                 };
                 legend.addTo(map);
