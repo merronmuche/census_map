@@ -149,13 +149,13 @@
                 const colorScale = ['#FFEDA0', '#FED976', '#FEB24C', '#FD8D3C', '#FC4E2A', '#E31A1C', '#BD0026', '#800026'];
 
                 if (displayOption === "block_group") {
-                    const ranges = [0, 50, 100, 200, 500, 1000];
+                    const ranges = [0, 50, 100, 200, 500, 1000,1500,20000];
                     return getRangeColor(population, ranges, colorScale);
                 } else if (displayOption === "census_tract") {
                     const ranges = [0, 500, 1000, 2000, 5000, 10000];
                     return getRangeColor(population, ranges, colorScale);
                 } else if (displayOption === "county") {
-                    const ranges = [0, 5000, 10000, 20000, 50000, 100000];
+                    const ranges = [0, 20000,40000, 50000,70000, 100000,500000,1000000];
                     return getRangeColor(population, ranges, colorScale);
                 }
                 return '#d9d9d9'; // Default color
@@ -186,13 +186,13 @@
                     let grades, title;
 
                     if (displayOption === "block_group") {
-                        grades = [0, 50, 100, 200, 500, 1000];
+                        grades = [0, 50, 100, 200, 500, 1000,1500,20000];
                         title = "Block Group Population";
                     } else if (displayOption === "census_tract") {
                         grades = [0, 500, 1000, 2000, 5000, 10000];
                         title = "Census Tract Population";
                     } else if (displayOption === "county") {
-                        grades = [0, 5000, 10000, 20000, 50000, 100000];
+                        grades = [0, 20000, 40000, 50000,70000,100000,500000, 1000000];
                         title = "County Population";
                     }
 
