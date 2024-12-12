@@ -45,7 +45,9 @@
         <h2 class="mb-4">Census Data Analysis Platform</h2>
         <div class="row mb-3">
             <div class="col-md-6">
-                <label for="metroDropdown" class="form-label">Select Metropolitan Areas (Max: 4)</label>
+                <label for="searchMetro" class="form-label">Search Metropolitan Areas</label>
+                <input type="text" id="searchMetro" class="form-control" placeholder="Search for a metro area">
+                <label for="metroDropdown" class="form-label mt-2">Select Metropolitan Areas (Max: 4)</label>
                 <select id="metroDropdown" class="form-select" multiple>
                     <option value="">Select Metro Areas</option>
                 </select>
@@ -60,44 +62,61 @@
                 </select>
             </div>
         </div>
-        <div id="mapContainer"></div>
+        <div id="mapContainer">
+            <!-- Default map will be added dynamically -->
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const metroDropdown = document.getElementById('metroDropdown');
+            const searchMetro = document.getElementById('searchMetro');
             const displayOption = document.getElementById('displayOption');
             const mapContainer = document.getElementById('mapContainer');
-    
+
+            let metroAreas = []; // Store all metro areas for search functionality
+
             // Create a default map view
             const defaultMapCard = document.createElement('div');
             defaultMapCard.className = 'map-card';
             defaultMapCard.innerHTML = `<h5>Default Map</h5><div class="map" id="default_map"></div>`;
             mapContainer.appendChild(defaultMapCard);
-    
+
             const defaultMap = L.map('default_map').setView([37.8, -96], 4); // Default to USA view
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(defaultMap);
-    
-            L.control.scale().addTo(defaultMap); // Add scale for better context
-    
+
             // Fetch metropolitan areas
             fetch('/api/get_metropolitan_areas/')
                 .then(response => response.json())
                 .then(data => {
-                    data.metropolitan_areas.forEach(metro => {
-                        const option = document.createElement('option');
-                        option.value = metro;
-                        option.textContent = metro;
-                        metroDropdown.appendChild(option);
-                    });
+                    metroAreas = data.metropolitan_areas; // Cache metro areas
+                    populateDropdown(metroAreas);
                 })
                 .catch(error => console.error('Error fetching metropolitan areas:', error));
-    
-            // Handle metropolitan area selection
+
+            // Populate dropdown with metro areas
+            function populateDropdown(areas) {
+                metroDropdown.innerHTML = ''; // Clear dropdown
+                areas.forEach(metro => {
+                    const option = document.createElement('option');
+                    option.value = metro;
+                    option.textContent = metro;
+                    metroDropdown.appendChild(option);
+                });
+            }
+
+            // Search functionality
+            searchMetro.addEventListener('input', function () {
+                const searchTerm = this.value.toLowerCase();
+                const filteredAreas = metroAreas.filter(metro => metro.toLowerCase().includes(searchTerm));
+                populateDropdown(filteredAreas);
+            });
+
+            // Enable the display option dropdown when metros are selected
             metroDropdown.addEventListener('change', function () {
                 if (metroDropdown.selectedOptions.length > 0 && metroDropdown.selectedOptions.length <= 4) {
                     displayOption.disabled = false;
@@ -105,57 +124,60 @@
                     displayOption.disabled = true;
                 }
             });
-    
-            // Handle display option change
+
+            // Handle geography level and map rendering
             displayOption.addEventListener('change', function () {
                 const selectedMetros = Array.from(metroDropdown.selectedOptions).map(option => option.value);
                 const selectedGeography = displayOption.value;
-    
+
                 if (!selectedMetros.length || !selectedGeography) return;
-    
-                mapContainer.innerHTML = ''; // Clear the container for new maps
-    
+
+                mapContainer.innerHTML = ''; // Clear the existing maps
+
                 selectedMetros.forEach(metro => {
                     const mapCard = document.createElement('div');
                     mapCard.className = 'map-card';
-                    mapCard.innerHTML = `<h5>${metro}</h5><div class="map" id="map_${metro.replace(/ /g, '_')}"></div>`;
+                    mapCard.innerHTML = `<h5>${metro} (${selectedGeography})</h5><div class="map" id="map_${metro.replace(/ /g, '_')}"></div>`;
                     mapContainer.appendChild(mapCard);
-    
+
                     renderMap(metro, selectedGeography, `map_${metro.replace(/ /g, '_')}`);
                 });
             });
-    
-            // Render map for a specific metro
+
+            // Render map function
             function renderMap(metro, geography, mapId) {
                 const map = L.map(mapId).setView([37.8, -96], 4);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '© OpenStreetMap'
                 }).addTo(map);
-    
-                fetch(`/api/get_${geography}_geojson/?metro_name=${encodeURIComponent(metro)}`)
+
+                const apiUrl = `/api/get_${geography}_geojson/?metro_name=${encodeURIComponent(metro)}`;
+                fetch(apiUrl)
                     .then(response => response.json())
                     .then(geojsonData => {
                         const geojsonLayer = L.geoJSON(geojsonData, {
                             style: featureStyle,
                             onEachFeature: onEachFeature
                         }).addTo(map);
-    
+
                         if (geojsonData.features && geojsonData.features.length > 0) {
                             map.fitBounds(geojsonLayer.getBounds());
                         }
-    
+
                         addLegend(map, geography);
                     })
-                    .catch(error => console.error(`Error loading GeoJSON for ${metro}:`, error));
+                    .catch(error => {
+                        console.error(`Error loading GeoJSON for ${geography}:`, error);
+                        alert(`Failed to load data for ${geography}. Please try again.`);
+                    });
             }
-    
+
             // Style function for GeoJSON
             function featureStyle(feature) {
                 const population = feature.properties.population || 0;
-                const displayOption = document.getElementById('displayOption').value;
                 return {
-                    fillColor: getDynamicColor(population, displayOption),
+                    fillColor: getDynamicColor(population),
                     weight: 1,
                     opacity: 1,
                     color: 'white',
@@ -163,30 +185,24 @@
                     fillOpacity: 0.7
                 };
             }
-    
-            // Dynamic color based on population and geographic level
-            function getDynamicColor(value, displayOption) {
-                let max = 3000; // Default to block group level
-                if (displayOption === "county") {
-                    max = 1000000; // Max for county
-                } else if (displayOption === "census_tract") {
-                    max = 10000; // Max for census tract
-                }
-    
+
+            // Dynamic color based on population
+            function getDynamicColor(value) {
+                const max = 1000000; // Generalized maximum population
                 const ratio = Math.min(Math.max(value / max, 0), 1); // Normalize between 0 and 1
                 const red = Math.floor(255 - 255 * ratio);
                 const green = Math.floor(255 * ratio);
                 const blue = 100; // Fixed blue value for aesthetics
                 return `rgb(${red},${green},${blue})`;
             }
-    
+
             // Add popup for each feature
             function onEachFeature(feature, layer) {
                 const population = feature.properties.population || "Unknown";
                 layer.bindPopup(`<strong>Name:</strong> ${feature.properties.name || "N/A"}<br>
                                  <strong>Population:</strong> ${population}`);
             }
-    
+
             // Add legend dynamically
             function addLegend(map, displayOption) {
                 const legend = L.control({ position: 'bottomright' });
@@ -204,6 +220,5 @@
             }
         });
     </script>
-    
 </body>
 </html>

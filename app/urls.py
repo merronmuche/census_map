@@ -10,7 +10,7 @@ from .views import (
 urlpatterns = [
     path("api/get_metropolitan_areas/", get_metropolitan_areas, name="get_metropolitan_areas"),
     path("api/get_county_geojson/", CountyGeoJSONView.as_view(), name="county_geojson"),
-    path("api/get_census_tracts/", CensusTractGeoJSONView.as_view(), name="census_tract_geojson"),
-    path("api/get_block_groups/", BlockGroupGeoJSONView.as_view(), name="block_group_geojson"),  
+    path("api/get_census_tract_geojson/", CensusTractGeoJSONView.as_view(), name="census_tract_geojson"),
+    path("api/get_block_group_geojson/", BlockGroupGeoJSONView.as_view(), name="block_group_geojson"),  
     path("map/", metropolitan_map, name="metropolitan_map"),
 ]
