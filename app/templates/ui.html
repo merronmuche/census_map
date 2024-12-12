@@ -7,8 +7,23 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
-        #map {
-            height: 500px;
+        #mapContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .map-card {
+            flex: 1 1 calc(50% - 15px); /* Adjusts to fit two maps per row */
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .map-card h5 {
+            margin: 10px;
+        }
+        .map {
+            height: 400px;
         }
         .legend {
             background: white;
@@ -29,13 +44,13 @@
     <div class="container mt-4">
         <h2 class="mb-4">Census Data Analysis Platform</h2>
         <div class="row mb-3">
-            <div class="col-md-4">
-                <label for="metroDropdown" class="form-label">Metropolitan Area</label>
-                <select id="metroDropdown" class="form-select">
-                    <option value="">Select a Metro Area</option>
+            <div class="col-md-6">
+                <label for="metroDropdown" class="form-label">Select Metropolitan Areas (Max: 4)</label>
+                <select id="metroDropdown" class="form-select" multiple>
+                    <option value="">Select Metro Areas</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <label for="displayOption" class="form-label">Geography Level</label>
                 <select id="displayOption" class="form-select" disabled>
                     <option value="">Select Geography Level</option>
@@ -45,30 +60,20 @@
                 </select>
             </div>
         </div>
-        <div id="map"></div>
+        <div id="mapContainer"></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            const map = L.map('map').setView([37.8, -96], 4);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(map);
-
-            const geojsonLayer = L.geoJSON(null, {
-                style: featureStyle,
-                onEachFeature: onEachFeature
-            }).addTo(map);
-
-            let legend;
+            const metroDropdown = document.getElementById('metroDropdown');
+            const displayOption = document.getElementById('displayOption');
+            const mapContainer = document.getElementById('mapContainer');
 
             // Fetch metropolitan areas
             fetch('/api/get_metropolitan_areas/')
                 .then(response => response.json())
                 .then(data => {
-                    const metroDropdown = document.getElementById('metroDropdown');
                     data.metropolitan_areas.forEach(metro => {
                         const option = document.createElement('option');
                         option.value = metro;
@@ -79,52 +84,57 @@
                 .catch(error => console.error('Error fetching metropolitan areas:', error));
 
             // Handle metropolitan area selection
-            document.getElementById('metroDropdown').addEventListener('change', function () {
-                const selectedMetro = this.value;
-                const displayOption = document.getElementById('displayOption');
-
-                if (selectedMetro) {
+            metroDropdown.addEventListener('change', function () {
+                if (metroDropdown.selectedOptions.length > 0 && metroDropdown.selectedOptions.length <= 4) {
                     displayOption.disabled = false;
                 } else {
                     displayOption.disabled = true;
-                    geojsonLayer.clearLayers();
                 }
             });
 
             // Handle display option change
-            document.getElementById('displayOption').addEventListener('change', function () {
-                const selectedMetro = document.getElementById('metroDropdown').value;
-                const displayOption = this.value;
+            displayOption.addEventListener('change', function () {
+                const selectedMetros = Array.from(metroDropdown.selectedOptions).map(option => option.value);
+                const selectedGeography = displayOption.value;
 
-                if (!selectedMetro || !displayOption) return;
+                if (!selectedMetros.length || !selectedGeography) return;
 
-                let apiEndpoint = "";
-                if (displayOption === "county") {
-                    apiEndpoint = `/api/get_county_geojson/?metro_name=${encodeURIComponent(selectedMetro)}`;
-                } else if (displayOption === "census_tract") {
-                    apiEndpoint = `/api/get_census_tracts/?metro_name=${encodeURIComponent(selectedMetro)}`;
-                } else if (displayOption === "block_group") {
-                    apiEndpoint = `/api/get_block_groups/?metro_name=${encodeURIComponent(selectedMetro)}`;
-                }
+                mapContainer.innerHTML = ''; // Clear the container for new maps
 
-                fetch(apiEndpoint)
+                selectedMetros.forEach(metro => {
+                    const mapCard = document.createElement('div');
+                    mapCard.className = 'map-card';
+                    mapCard.innerHTML = `<h5>${metro}</h5><div class="map" id="map_${metro.replace(/ /g, '_')}"></div>`;
+                    mapContainer.appendChild(mapCard);
+
+                    renderMap(metro, selectedGeography, `map_${metro.replace(/ /g, '_')}`);
+                });
+            });
+
+            // Render map for a specific metro
+            function renderMap(metro, geography, mapId) {
+                const map = L.map(mapId).setView([37.8, -96], 4);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+
+                fetch(`/api/get_${geography}_geojson/?metro_name=${encodeURIComponent(metro)}`)
                     .then(response => response.json())
                     .then(geojsonData => {
-                        geojsonLayer.clearLayers();
-                        geojsonLayer.addData(geojsonData);
+                        const geojsonLayer = L.geoJSON(geojsonData, {
+                            style: featureStyle,
+                            onEachFeature: onEachFeature
+                        }).addTo(map);
 
                         if (geojsonData.features && geojsonData.features.length > 0) {
                             map.fitBounds(geojsonLayer.getBounds());
                         }
 
-                        if (legend) {
-                            legend.remove();
-                        }
-
-                        addLegend(displayOption);
+                        addLegend(map, geography);
                     })
-                    .catch(error => alert('Failed to load GeoJSON data. Please try again.'));
-            });
+                    .catch(error => console.error(`Error loading GeoJSON for ${metro}:`, error));
+            }
 
             // Style function for GeoJSON
             function featureStyle(feature) {
@@ -164,8 +174,8 @@
             }
 
             // Add legend dynamically
-            function addLegend(displayOption) {
-                legend = L.control({ position: 'bottomright' });
+            function addLegend(map, displayOption) {
+                const legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function () {
                     const div = L.DomUtil.create('div', 'legend');
                     div.innerHTML = `
