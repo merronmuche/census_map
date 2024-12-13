@@ -13,11 +13,10 @@
             gap: 15px;
         }
         .map-card {
-            flex: 1 1 calc(50% - 15px); /* Adjusts to fit two maps per row */
+            flex: 1 1 calc(50% - 15px);
             border: 1px solid #ddd;
             border-radius: 8px;
             overflow: hidden;
-            position: relative;
         }
         .map-card h5 {
             margin: 10px;
@@ -62,9 +61,7 @@
                 </select>
             </div>
         </div>
-        <div id="mapContainer">
-            <!-- Default map will be added dynamically -->
-        </div>
+        <div id="mapContainer"></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -75,32 +72,29 @@
             const displayOption = document.getElementById('displayOption');
             const mapContainer = document.getElementById('mapContainer');
 
-            let metroAreas = []; // Store all metro areas for search functionality
+            let metroAreas = [];
 
-            // Create a default map view
             const defaultMapCard = document.createElement('div');
             defaultMapCard.className = 'map-card';
-            defaultMapCard.innerHTML = `<h5>Default Map</h5><div class="map" id="default_map"></div>`;
+            defaultMapCard.innerHTML = `<div class="map" id="default_map"></div>`;
             mapContainer.appendChild(defaultMapCard);
 
-            const defaultMap = L.map('default_map').setView([37.8, -96], 4); // Default to USA view
+            const defaultMap = L.map('default_map').setView([37.8, -96], 4);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(defaultMap);
 
-            // Fetch metropolitan areas
             fetch('/api/get_metropolitan_areas/')
                 .then(response => response.json())
                 .then(data => {
-                    metroAreas = data.metropolitan_areas; // Cache metro areas
+                    metroAreas = data.metropolitan_areas;
                     populateDropdown(metroAreas);
                 })
                 .catch(error => console.error('Error fetching metropolitan areas:', error));
 
-            // Populate dropdown with metro areas
             function populateDropdown(areas) {
-                metroDropdown.innerHTML = ''; // Clear dropdown
+                metroDropdown.innerHTML = '';
                 areas.forEach(metro => {
                     const option = document.createElement('option');
                     option.value = metro;
@@ -109,30 +103,23 @@
                 });
             }
 
-            // Search functionality
             searchMetro.addEventListener('input', function () {
                 const searchTerm = this.value.toLowerCase();
                 const filteredAreas = metroAreas.filter(metro => metro.toLowerCase().includes(searchTerm));
                 populateDropdown(filteredAreas);
             });
 
-            // Enable the display option dropdown when metros are selected
             metroDropdown.addEventListener('change', function () {
-                if (metroDropdown.selectedOptions.length > 0 && metroDropdown.selectedOptions.length <= 4) {
-                    displayOption.disabled = false;
-                } else {
-                    displayOption.disabled = true;
-                }
+                displayOption.disabled = metroDropdown.selectedOptions.length === 0 || metroDropdown.selectedOptions.length > 4;
             });
 
-            // Handle geography level and map rendering
             displayOption.addEventListener('change', function () {
                 const selectedMetros = Array.from(metroDropdown.selectedOptions).map(option => option.value);
                 const selectedGeography = displayOption.value;
 
                 if (!selectedMetros.length || !selectedGeography) return;
 
-                mapContainer.innerHTML = ''; // Clear the existing maps
+                mapContainer.innerHTML = '';
 
                 selectedMetros.forEach(metro => {
                     const mapCard = document.createElement('div');
@@ -144,7 +131,6 @@
                 });
             });
 
-            // Render map function
             function renderMap(metro, geography, mapId) {
                 const map = L.map(mapId).setView([37.8, -96], 4);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -157,8 +143,15 @@
                     .then(response => response.json())
                     .then(geojsonData => {
                         const geojsonLayer = L.geoJSON(geojsonData, {
-                            style: featureStyle,
-                            onEachFeature: onEachFeature
+                            style: feature => ({
+                                fillColor: getDynamicColor(feature.properties.population || 0, geography),
+                                weight: 1,
+                                opacity: 1,
+                                color: 'white',
+                                dashArray: '3',
+                                fillOpacity: 0.7
+                            }),
+                            onEachFeature: (feature, layer) => onEachFeature(feature, layer, geography)
                         }).addTo(map);
 
                         if (geojsonData.features && geojsonData.features.length > 0) {
@@ -173,46 +166,38 @@
                     });
             }
 
-            // Style function for GeoJSON
-            function featureStyle(feature) {
-                const population = feature.properties.population || 0;
-                return {
-                    fillColor: getDynamicColor(population),
-                    weight: 1,
-                    opacity: 1,
-                    color: 'white',
-                    dashArray: '3',
-                    fillOpacity: 0.7
-                };
-            }
+            function getDynamicColor(value, geography) {
+                let max = 1000000;
+                if (geography === "census_tract") max = 10000;
+                else if (geography === "block_group") max = 1000;
 
-            // Dynamic color based on population
-            function getDynamicColor(value) {
-                const max = 1000000; // Generalized maximum population
-                const ratio = Math.min(Math.max(value / max, 0), 1); // Normalize between 0 and 1
+                const ratio = Math.min(Math.max(value / max, 0), 1);
                 const red = Math.floor(255 - 255 * ratio);
                 const green = Math.floor(255 * ratio);
-                const blue = 100; // Fixed blue value for aesthetics
+                const blue = 100;
                 return `rgb(${red},${green},${blue})`;
             }
 
-            // Add popup for each feature
-            function onEachFeature(feature, layer) {
+            function onEachFeature(feature, layer, geography) {
                 const population = feature.properties.population || "Unknown";
                 layer.bindPopup(`<strong>Name:</strong> ${feature.properties.name || "N/A"}<br>
+                                 <strong>Geography:</strong> ${geography}<br>
                                  <strong>Population:</strong> ${population}`);
             }
 
-            // Add legend dynamically
-            function addLegend(map, displayOption) {
+            function addLegend(map, geography) {
                 const legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function () {
                     const div = L.DomUtil.create('div', 'legend');
+                    let max = 100000;
+                    if (geography === "census_tract") max = 10000;
+                    else if (geography === "block_group") max = 1000;
+
                     div.innerHTML = `
-                        <h4>${displayOption.charAt(0).toUpperCase() + displayOption.slice(1)} Population</h4>
+                        <h6>${geography.charAt(0).toUpperCase() + geography.slice(1)} Population</h6>
                         <div style="background: linear-gradient(to right, rgb(255,100,100), rgb(100,255,100)); height: 20px;"></div>
                         <div style="display: flex; justify-content: space-between;">
-                            <span>Low</span><span>High</span>
+                            <span>0</span><span>${max.toLocaleString()}</span>
                         </div>`;
                     return div;
                 };
