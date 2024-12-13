@@ -41,12 +41,12 @@
 </head>
 <body>
     <div class="container mt-4">
-        <h2 class="mb-4">Census Data Analysis Platform</h2>
-        <div class="row mb-3">
+        <h4 class="mb-4">Census Data Analysis Platform</h4>
+        <div class="row gy-3">
+            <!-- Existing Functionality -->
             <div class="col-md-6">
-                <label for="searchMetro" class="form-label">Search Metropolitan Areas</label>
-                <input type="text" id="searchMetro" class="form-control" placeholder="Search for a metro area">
-                <label for="metroDropdown" class="form-label mt-2">Select Metropolitan Areas (Max: 4)</label>
+                <label for="searchMetro" class="form-label">Select Metropolitan Areas (Max: 4)</label>
+                <input type="text" id="searchMetro" class="form-control" placeholder="Search">
                 <select id="metroDropdown" class="form-select" multiple>
                     <option value="">Select Metro Areas</option>
                 </select>
@@ -60,6 +60,22 @@
                     <option value="block_group">Block Group</option>
                 </select>
             </div>
+
+            <!-- Additional Functionality -->
+            <div class="col-md-6">
+                <label for="dataType" class="form-label">Data Type</label>
+                <select id="dataType" class="form-select">
+                    <option value="">Select Data Type</option>
+                    <option value="acs">ACS 5-Year Estimates</option>
+                    <option value="decennial">Decennial Census</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="yearDropdown" class="form-label">Year</label>
+                <select id="yearDropdown" class="form-select" disabled>
+                    <option value="">Select Year</option>
+                </select>
+            </div>
         </div>
         <div id="mapContainer"></div>
     </div>
@@ -71,6 +87,8 @@
             const searchMetro = document.getElementById('searchMetro');
             const displayOption = document.getElementById('displayOption');
             const mapContainer = document.getElementById('mapContainer');
+            const dataType = document.getElementById('dataType');
+            const yearDropdown = document.getElementById('yearDropdown');
 
             let metroAreas = [];
 
@@ -113,9 +131,40 @@
                 displayOption.disabled = metroDropdown.selectedOptions.length === 0 || metroDropdown.selectedOptions.length > 4;
             });
 
+            dataType.addEventListener('change', function () {
+                const selectedDataType = dataType.value;
+                yearDropdown.innerHTML = '<option value="">Select Year</option>'; // Reset year dropdown
+                if (selectedDataType === 'acs') {
+                    const acsYears = [
+                        '2018-2022 ACS 5-Year',
+                        '2017-2021 ACS 5-Year',
+                        '2016-2020 ACS 5-Year',
+                        '2015-2019 ACS 5-Year',
+                        '2014-2018 ACS 5-Year',
+                    ];
+                    acsYears.forEach(year => {
+                        const option = document.createElement('option');
+                        option.value = year;
+                        option.textContent = year;
+                        yearDropdown.appendChild(option);
+                    });
+                } else if (selectedDataType === 'decennial') {
+                    const decennialYears = ['2000', '2010', '2020'];
+                    decennialYears.forEach(year => {
+                        const option = document.createElement('option');
+                        option.value = year;
+                        option.textContent = year;
+                        yearDropdown.appendChild(option);
+                    });
+                }
+                yearDropdown.disabled = !selectedDataType; // Enable or disable year dropdown
+            });
+
             displayOption.addEventListener('change', function () {
                 const selectedMetros = Array.from(metroDropdown.selectedOptions).map(option => option.value);
                 const selectedGeography = displayOption.value;
+                const selectedYear = yearDropdown.value;
+                const selectedDataType = dataType.value;
 
                 if (!selectedMetros.length || !selectedGeography) return;
 
